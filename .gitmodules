@@ -1,0 +1,6 @@
+[submodule "ext/glfw"]
+	path = ext/glfw
+	url = git://github.com/glfw/glfw.git
+[submodule "ext/libxm"]
+	path = ext/libxm
+	url = git://github.com/Artefact2/libxm.git
