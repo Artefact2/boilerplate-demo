@@ -6,86 +6,86 @@
  * License, Version 2, as published by Sam Hocevar. See
  * http://sam.zoy.org/wtfpl/COPYING for more details. */
 
-#include <demo_internal.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <X11/Xlib.h>
+#include <GL/glx.h>
+#include <alsa/asoundlib.h>
 
+#include <xm.h>
+#include <demo_internal.h>
 #include "xmdata.h"
 
-#define AUDIO_BUF_FRAMES 512
-#define RATE 48000
-
-static GLFWwindow* window;
-static ao_device* aodev;
 static xm_context_t* xmctx;
-static double t0;
 
-void glfw_error_callback(int code, const char* mesg) {
-	DEBUG("GLFW error %i: %s", code, mesg);
-}
+static snd_pcm_t* device;
+static snd_pcm_uframes_t bsize = 1024, psize = 128;
+static unsigned int rate = 48000;
+static const snd_pcm_channel_area_t* areas;
+static snd_pcm_uframes_t offset, frames;
+
+/* https://www.khronos.org/opengl/wiki/Programming_OpenGL_in_Linux:_GLX_and_Xlib */
 
 void setup(void) {
-	ao_initialize();
+	void* params;
+	
+	d_assertz(snd_pcm_open(&device, "default", SND_PCM_STREAM_PLAYBACK, 0));
+	snd_pcm_hw_params_malloc((snd_pcm_hw_params_t**)(&params));
+	snd_pcm_hw_params_any(device, params);
+	d_assertz(snd_pcm_hw_params_set_access(device, params, SND_PCM_ACCESS_MMAP_INTERLEAVED));
+	d_assertz(snd_pcm_hw_params_set_format(device, params, SND_PCM_FORMAT_FLOAT));
+	d_assertz(snd_pcm_hw_params_set_rate_resample(device, params, 0));
+	d_assertz(snd_pcm_hw_params_set_rate_near(device, params, &rate, 0));
+	d_assertz(snd_pcm_hw_params_set_channels(device, params, 2));
+	d_assertz(snd_pcm_hw_params_set_buffer_size_near(device, params, &bsize));
+	d_assertz(snd_pcm_hw_params_set_period_size_near(device, params, &psize, 0));
+	d_assertz(snd_pcm_hw_params(device, params));
+	snd_pcm_hw_params_free(params);
 
-	ao_sample_format fmt = {
-		.bits = 16,
-		.rate = RATE,
-		.channels = 2,
-		.byte_format = AO_FMT_NATIVE,
-		.matrix = "L,R",
-	};
+	d_debug("ALSA: rate %u, period size %lu, buffer size %lu\n", rate, psize, bsize);
 
-	aodev = ao_open_live(
-		ao_default_driver_id(),
-		&fmt,
-		NULL
-	);
-
-	xm_create_context(&xmctx, (const char*)xmdata, RATE);
-	//xm_set_max_loop_count(xmctx, 1);
-
-	glfwSetErrorCallback(glfw_error_callback);
-	glfwInit();
-	window = glfwCreateWindow(800, 600, "demo", NULL, NULL);
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
+	snd_pcm_sw_params_malloc((snd_pcm_sw_params_t**)(&params));
+	snd_pcm_sw_params_current(device, params);
+	d_assertz(snd_pcm_sw_params(device, params));
+	d_assertz(snd_pcm_sw_params_set_start_threshold(device, params, bsize - psize));
+	d_assertz(snd_pcm_sw_params_set_avail_min(device, params, psize));
+	snd_pcm_sw_params_free(params);
+	
+	d_assertz(xm_create_context(&xmctx, (const char*)xmdata, rate));
+	
+	d_assertz(snd_pcm_prepare(device));
+	d_assertz(snd_pcm_start(device));
 }
 
 void teardown(void) {
-	glfwDestroyWindow(window);
-	glfwTerminate();
-
+	snd_pcm_drain(device);
+	snd_pcm_close(device);
 	xm_free_context(xmctx);
-
-	ao_close(aodev);
-	ao_shutdown();
-}
-
-void* play_audio_loop(void* param) {
-	float audiobuffer[AUDIO_BUF_FRAMES << 1];
-
-	/* XXX: this is hackish */
-	t0 = glfwGetTime() - 0.050;
-
-	while(true) {
-		/* Acquire semaphore for xmctx */
-		//if(xm_get_loop_count(xmctx) != 0) break;
-		xm_generate_samples(xmctx, audiobuffer, AUDIO_BUF_FRAMES);
-		/* TODO: update timing stuff HERE */
-		/* Release semaphore for xmctx */
-
-		for(int i = 0; i < (AUDIO_BUF_FRAMES << 1); ++i) {
-			((int16_t*)audiobuffer)[i] = (int16_t)((1 << 15) * audiobuffer[i]);
-		}
-
-		ao_play(aodev, (char*)audiobuffer, AUDIO_BUF_FRAMES << 2);
-	}
-
-	return param;
 }
 
 void render(void) {
-	float ratio, w, z;
+	if((frames = snd_pcm_avail_update(device)) >= psize) {
+		frames -= (frames % psize);
+		d_assertz(snd_pcm_mmap_begin(device, &areas, &offset, &frames));
+		xm_generate_samples(xmctx, (float*)((char*)(areas[0].addr) + (offset << 3)), frames);
+		d_asserteq(snd_pcm_mmap_commit(device, offset, frames), frames);
+	} else snd_pcm_wait(device, 1); /* XXX: tight loop bugs out randomly, only silence after it */
+
+	static char* notes[] = { "A-", "A#", "B-", "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#" };
+
+	printf("\n");
+	for(int i = 1; i <= xm_get_number_of_channels(xmctx); ++i) {
+		if(!xm_is_channel_active(xmctx, i)) {
+			printf("... .. ..  ");
+			continue;
+		}
+
+		float freq = xm_get_frequency_of_channel(xmctx, i);
+		int oct = (int)((logf(freq / 440.0) / logf(2.0)) - 2.0);
+		int note = (int)(fmodf(logf(freq / 440.0) / logf(2.0) + 10.0, 1.0) * 12.0 + .5) % 12;
+		d_assert(note >= 0 && note <= 11);
+		printf("%02s%01d %02d %02x  ", notes[note], oct, xm_get_instrument_of_channel(xmctx, i), (unsigned int)(64.0 * xm_get_volume_of_channel(xmctx, i)));
+	}
+	
+/*	float ratio, w, z;
 	int width, height;
 	double l, t;
 
@@ -116,27 +116,24 @@ void render(void) {
 	glVertex3f(-0.5f*w, -0.8660254037844386f*w, 0.f);
 	glColor3f(z, z, 1.f);
 	glVertex3f(1.0f*w, 0.f, 0.f);
-	glEnd();
+	glEnd();*/
 }
 
 int main(void) {
-	pthread_t audiothread;
-
 	setup();
 
-	/* Start playing the module */
-	pthread_create(&audiothread, NULL, play_audio_loop, NULL);
+	while(1) render();
 
-	while(!glfwWindowShouldClose(window)) {
+	/*while(!glfwWindowShouldClose(window)) {
 		render();
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 
-		if(glfwGetKey(window, GLFW_KEY_ESCAPE) /*|| xm_get_loop_count(xmctx) > 0*/) {
+		if(glfwGetKey(window, GLFW_KEY_ESCAPE)) {
 			glfwSetWindowShouldClose(window, GL_TRUE);
 		}
-	}
+	}*/
 
 	teardown();
 	return 0;
