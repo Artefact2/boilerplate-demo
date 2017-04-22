@@ -54,3 +54,6 @@ extern demo_state_t state;
 
 void scene1_setup(void);
 void scene1_render(void);
+
+void scene2_setup(void);
+void scene2_render(void);

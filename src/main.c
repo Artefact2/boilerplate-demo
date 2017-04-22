@@ -7,7 +7,7 @@
  * http://sam.zoy.org/wtfpl/COPYING for more details. */
 
 #include "demo.h"
-#include "xmdata.h"
+#include "mus.h"
 
 #define DEFAULT_RATE 48000
 #define DEFAULT_PSIZE 256
@@ -81,7 +81,7 @@ static void setup(void) {
 	d_assertz(snd_pcm_sw_params_set_avail_min(pcm, params, psize));
 	snd_pcm_sw_params_free(params);*/
 	
-	d_assertz(xm_create_context(&state.xm, (const char*)xmdata, state.rate));
+	d_assertz(xm_create_context(&state.xm, (const char*)mus, state.rate));
 
 	/* https://www.khronos.org/opengl/wiki/Programming_OpenGL_in_Linux:_GLX_and_Xlib */
 	display = XOpenDisplay(NULL);
@@ -110,7 +110,7 @@ static void setup(void) {
 }
 
 static void render(void) {
-	int pat;
+	unsigned char pat;
 	
 	while(XPending(display)) {
 		XEvent xev;

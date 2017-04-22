@@ -35,4 +35,4 @@ LIST(APPEND DEMOS_LINK_LIBS ${XM_LIBRARIES} m xms)
 ADD_DEFINITIONS("-g -Os -Wall -pedantic --std=c11 -fdata-sections -ffunction-sections -flto -fuse-linker-plugin")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 
-ADD_SUBDIRECTORY(dummy-template)
+ADD_SUBDIRECTORY(src)
