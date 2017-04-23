@@ -19,4 +19,3 @@ Improvements
 
 * Investigate libxm size
 * Procedurally generate samples of xm instruments (softsynth, filters, etc.)
-* After `strip -s`, a `strings demo` still returns `xm_*` stuff. Since we're statically linking against libxm, why is this there? Same for `scene*_*` functions.

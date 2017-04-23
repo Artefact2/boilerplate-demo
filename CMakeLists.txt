@@ -29,10 +29,10 @@ ADD_DEFINITIONS(-D_POSIX_SOURCE)
 INCLUDE_DIRECTORIES(${ALSA_INCLUDE_DIRS} ${X11_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR})
 INCLUDE_DIRECTORIES(ext/libxm/include)
 
-LIST(APPEND DEMOS_LINK_LIBS ${ALSA_LIBRARIES} ${X11_LIBRARIES} ${OPENGL_LIBRARIES})
+LIST(APPEND DEMOS_LINK_LIBS ${ALSA_LIBRARIES} ${X11_LIBRARIES} ${OPENGL_gl_LIBRARY})
 LIST(APPEND DEMOS_LINK_LIBS ${XM_LIBRARIES} m xms)
 
-ADD_DEFINITIONS("-g -Os -Wall -pedantic --std=c11 -fdata-sections -ffunction-sections -flto -fuse-linker-plugin")
+ADD_DEFINITIONS("-g -Os -Wall -pedantic --std=c11 -fdata-sections -ffunction-sections -flto -fuse-linker-plugin -fvisibility=hidden")
 SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
 
 ADD_SUBDIRECTORY(src)
