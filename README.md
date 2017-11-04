@@ -17,5 +17,4 @@ Goals
 Improvements
 ============
 
-* Investigate libxm size
-* Procedurally generate samples of xm instruments (softsynth, filters, etc.)
+* ?

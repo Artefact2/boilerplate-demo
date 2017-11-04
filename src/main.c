@@ -25,7 +25,7 @@ static bool stop = false;
 
 demo_state_t state;
 
-static void gen_audio_samples(snd_async_handler_t* data) {	
+static void gen_audio_samples(snd_async_handler_t* data) {
 	const snd_pcm_channel_area_t* areas;
 	snd_pcm_uframes_t offset, frames;
 
@@ -36,7 +36,7 @@ static void gen_audio_samples(snd_async_handler_t* data) {
 		snd_pcm_prepare(pcm);
 		snd_pcm_start(pcm);
 	}
-	
+
 	if((frames = snd_pcm_avail_update(pcm)) > 0) {
 		d_assertz(snd_pcm_mmap_begin(pcm, &areas, &offset, &frames));
 		xm_generate_samples(state.xm, (float*)((char*)(areas[0].addr) + (offset << 3)), frames);
@@ -55,7 +55,7 @@ static void setup(void) {
 	GLXContext glc;
 	XVisualInfo* vi;
 	XSetWindowAttributes swa;
-	
+
 	d_assertz(snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0));
 	snd_pcm_hw_params_malloc((snd_pcm_hw_params_t**)(&params));
 	snd_pcm_hw_params_any(pcm, params);
@@ -80,8 +80,8 @@ static void setup(void) {
 	d_assertz(snd_pcm_sw_params_set_start_threshold(pcm, params, bsize - psize));
 	d_assertz(snd_pcm_sw_params_set_avail_min(pcm, params, psize));
 	snd_pcm_sw_params_free(params);*/
-	
-	d_assertz(xm_create_context(&state.xm, (const char*)mus, state.rate));
+
+	xm_create_context_from_libxmize(&state.xm, (const char*)mus, state.rate);
 
 	/* https://www.khronos.org/opengl/wiki/Programming_OpenGL_in_Linux:_GLX_and_Xlib */
 	display = XOpenDisplay(NULL);
@@ -101,7 +101,7 @@ static void setup(void) {
 
 	scene1_setup();
 	scene2_setup();
-	
+
 	d_assertz(snd_async_add_pcm_handler(&ah, pcm, gen_audio_samples, NULL));
 	d_assertz(snd_pcm_prepare(pcm));
 	gen_audio_samples(NULL);
@@ -111,7 +111,7 @@ static void setup(void) {
 
 static void render(void) {
 	unsigned char pat;
-	
+
 	while(XPending(display)) {
 		XEvent xev;
 		XNextEvent(display, &xev);
@@ -127,7 +127,7 @@ static void render(void) {
 			state.ratio = (float)ww / (float)wh;
 		}
 	}
-	
+
 	glViewport(0, 0, ww, wh);
 
 	xm_get_position(state.xm, NULL, &pat, NULL, NULL);
@@ -136,7 +136,7 @@ static void render(void) {
 	} else {
 		scene2_render();
 	}
-	
+
 	glXSwapBuffers(display, window);
 }
 
